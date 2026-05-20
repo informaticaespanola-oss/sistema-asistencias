@@ -18,6 +18,8 @@ st.info("""
 * **Menor a 30 min:** Se redondea a la hora en punto (:00).
 * **De 30 a 45 min:** Se redondea a la media hora (:30).
 * **Mayor o igual a 46 min:** Se redondea a la hora siguiente (:00).
+
+**Para procesar trabajadores con horario mixto se debe añadir otra columna al archivo de asisencias con la palabra "MIXTO" en mayusculas a los trabajadores con dicho horario**
 """)
 
 def redondear_hora(hora_str, es_entrada=True):
