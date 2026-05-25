@@ -176,14 +176,14 @@ if uploaded_file is not None:
                 hora_inicio = horas_ordenadas[0]
                 hora_final = horas_ordenadas[-1]
                 
-                # marcajes adicionales (Excepto el primero y el último)
+                # marcajes adicionales (Excepto el primero y el último) ---
                 if total_marcas > 2:
                     # Unimos los marcajes intermedios con un separador
                     marcas_adicionales = " | ".join(horas_ordenadas[1:-1])
                 else:
                     marcas_adicionales = "Sin marcas"
                 
-                # Se obtienen las horas redondeadas oficiales de Entrada y Salida principal
+                # Se obtienen las horas redondeadas oficiales de entrada y salida principal
                 hora_inicio_red = redondear_hora(hora_inicio, es_entrada=True)
                 hora_final_red = redondear_hora(hora_final, es_entrada=False)
                 
@@ -232,7 +232,7 @@ if uploaded_file is not None:
                     'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
                     'Entrada Original': hora_inicio, 
                     'Salida Original': hora_final,
-                    'Marcaje Adicional': marcas_adicionales,
+                    'Marcas Adicionales': marcas_adicionales,
                     'Entrada Redondeada': hora_inicio_red, 
                     'Salida Redondeada': hora_final_red,
                     'Horas Totales': round(horas_totales, 2),
