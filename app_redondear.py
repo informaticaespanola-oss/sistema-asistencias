@@ -19,7 +19,7 @@ st.info("""
 * **De 30 a 45 min:** Se redondea a la media hora (:30).
 * **Mayor o igual a 46 min:** Se redondea a la hora siguiente (:00).
 
-**Para procesar trabajadores con horario mixto se debe añadir otra columna al archivo de asisencias con la palabra "MIXTO" en mayusculas a los trabajadores con dicho horario**
+* **Para procesar trabajadores con horario mixto se debe añadir otra columna al archivo de asisencias con la palabra "MIXTO" en mayusculas a los trabajadores con dicho horario.**
 """)
 
 def redondear_hora(hora_str, es_entrada=True):
@@ -57,6 +57,7 @@ def redondear_hora(hora_str, es_entrada=True):
 #  Zona interactiva para subir el archivo Excel
 uploaded_file = st.file_uploader("Arrastra aquí el archivo de Excel", type=["xlsx"])
 
+#esto es para usar el mismo nombre del archivo pero con el final procesado
 if uploaded_file is not None:
     nombre_original = uploaded_file.name 
     nombre_base, extension = os.path.splitext(nombre_original) 
@@ -86,7 +87,7 @@ if uploaded_file is not None:
             
             #  Separar Fecha y Hora de forma segura
             df['Fecha_Hora_Formateada'] = pd.to_datetime(df['Fecha_Hora_Original'], errors='coerce')
-            df = df.dropna(subset=['Fecha_Hora_Formateada'])
+            df = df.dropna(subset=['Fecha_Hora_Formateada']) #elimina la fila que no tiene fecha
             df['Solo_Fecha'] = df['Fecha_Hora_Formateada'].dt.date
             df['Solo_Hora'] = df['Fecha_Hora_Formateada'].dt.time
             
@@ -134,7 +135,7 @@ if uploaded_file is not None:
                 horas_totales_dia = sorted(horas)
                 textos_limpios = []
                 
-                # limp¿ieza de marcajes dobles con brecha de 5 minutos es decir 300 segundos
+                # Limpieza de marcajes dobles con brecha de 5 minutos (300 segundos)
                 for h in horas_totales_dia:
                     if not textos_limpios:
                         textos_limpios.append(h)
@@ -145,6 +146,14 @@ if uploaded_file is not None:
                         if (t_actual - t_anterior).total_seconds() > 300:
                             textos_limpios.append(h)
                 
+                # La salida SIEMPRE debe ser la última marca del día 
+                if len(horas_totales_dia) >= 2:
+                    ultima_marca_real = horas_totales_dia[-1]
+                    # Si la última marca real fue ignorada por la regla de los 5 min, 
+                    # reemplazamos el último registro válido con esta última marca real.
+                    if textos_limpios[-1] != ultima_marca_real:
+                        textos_limpios[-1] = ultima_marca_real
+
                 horas_ordenadas = textos_limpios
                 total_marcas = len(horas_ordenadas)
                 
@@ -155,6 +164,7 @@ if uploaded_file is not None:
                         'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
                         'Entrada Original': entrada_orig, 
                         'Salida Original': 'FALTA MARCA SALIDA',
+                        'Marcas Adicionales': 'N/A', # Agregamos la columna vacía
                         'Entrada Redondeada': redondear_hora(entrada_orig, es_entrada=True),
                         'Salida Redondeada': 'FALTA MARCA SALIDA',
                         'Horas Totales': 0.0,
@@ -165,6 +175,13 @@ if uploaded_file is not None:
                     
                 hora_inicio = horas_ordenadas[0]
                 hora_final = horas_ordenadas[-1]
+                
+                # marcajes adicionales (Excepto el primero y el último)
+                if total_marcas > 2:
+                    # Unimos los marcajes intermedios con un separador
+                    marcas_adicionales = " | ".join(horas_ordenadas[1:-1])
+                else:
+                    marcas_adicionales = "Sin marcas"
                 
                 # Se obtienen las horas redondeadas oficiales de Entrada y Salida principal
                 hora_inicio_red = redondear_hora(hora_inicio, es_entrada=True)
@@ -180,11 +197,11 @@ if uploaded_file is not None:
                 
                 # descansos
                 
-                #  Entrada y Salida simple
+                # Entrada y Salida simple
                 if total_marcas == 2 and horas_totales >= 7:
                     horas_a_restar = 1.0
                     
-                #  Olvidó marcar el regreso de almuerzo
+                # Olvidó marcar el regreso de almuerzo
                 elif total_marcas == 3:
                     dt_salida_medio = datetime.strptime(horas_ordenadas[1], formato) 
                     tiempo_hasta_fin = (dt_final_red - dt_salida_medio).total_seconds() / 3600
@@ -210,17 +227,21 @@ if uploaded_file is not None:
                 horas_laborales = 7.5 if "MIXTO" in quinta_col else 8.0
                 horas_extra = max(0.0, horas_netas - horas_laborales)
                 
-                # Guardar los registros en el diccionario
+                # Guardar los registros en el diccionario 
                 reporte_horas.append({
                     'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
-                    'Entrada Original': hora_inicio, 'Salida Original': hora_final,
-                    'Entrada Redondeada': hora_inicio_red, 'Salida Redondeada': hora_final_red,
+                    'Entrada Original': hora_inicio, 
+                    'Salida Original': hora_final,
+                    'Marcaje Adicional': marcas_adicionales,
+                    'Entrada Redondeada': hora_inicio_red, 
+                    'Salida Redondeada': hora_final_red,
                     'Horas Totales': round(horas_totales, 2),
                     'Horas Restadas Descanso': round(horas_a_restar, 2), 
-                    'Horas Netas': round(horas_netas, 2), 'Horas Extra': round(horas_extra, 2)
+                    'Horas Netas': round(horas_netas, 2), 
+                    'Horas Extra': round(horas_extra, 2)
                 })
                 
-            # renderizado del rep¿orte
+            # renderizado del reporte
             df_resultado = pd.DataFrame(reporte_horas)
             
             if not df_resultado.empty:
