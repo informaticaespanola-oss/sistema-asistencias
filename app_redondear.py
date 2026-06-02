@@ -225,7 +225,14 @@ if uploaded_file is not None:
                 
                 # Cálculo de horas extra sobre la base laboral reglamentaria
                 horas_laborales = 7.5 if "MIXTO" in quinta_col else 8.0
-                horas_extra = max(0.0, horas_netas - horas_laborales)
+                horas_extra = max(0.0, horas_netas - horas_laborales) 
+
+                bono_nocturno = 0.0
+                hora_bono = datetime.strptime("19:00:00", formato)
+
+                if dt_final_red >= hora_bono:
+                    diferencia_horas = (dt_final_red - hora_bono).total_seconds() / 3600
+                    bono_nocturno = max(0.0, diferencia_horas)
                 
                 # Guardar los registros en el diccionario 
                 reporte_horas.append({
@@ -238,7 +245,8 @@ if uploaded_file is not None:
                     'Horas Totales': round(horas_totales, 2),
                     'Horas Restadas Descanso': round(horas_a_restar, 2), 
                     'Horas Netas': round(horas_netas, 2), 
-                    'Horas Extra': round(horas_extra, 2)
+                    'Horas Extra': round(horas_extra, 2),
+                    'Bono nocturno': bono_nocturno
                 })
                 
             # renderizado del reporte
