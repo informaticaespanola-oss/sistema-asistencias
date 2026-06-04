@@ -227,7 +227,9 @@ if uploaded_file is not None:
                 horas_laborales = 7.5 if "MIXTO" in quinta_col else 8.0
                 horas_extra = max(0.0, horas_netas - horas_laborales) 
 
+                #Esto es el calculo para el bono nocturno
                 bono_nocturno = 0.0
+                #Este es el margen de donde comienza el bono nocturno
                 hora_bono = datetime.strptime("19:00:00", formato)
 
                 if dt_final_red >= hora_bono:
@@ -248,28 +250,49 @@ if uploaded_file is not None:
                     'Horas Extra': round(horas_extra, 2),
                     'Bono nocturno': bono_nocturno
                 })
-                
-            # renderizado del reporte
+
+                                
+            # renderizado del reporte            
             df_resultado = pd.DataFrame(reporte_horas)
-            
+
             if not df_resultado.empty:
                 st.success("¡Procesamiento completado exitosamente!")
-                st.subheader("📊 Vista Previa del Reporte")
-                st.dataframe(df_resultado, use_container_width=True)
                 
+                # Pandas ordenará con esta prioridad: 1º Depto, 2º Nombre (A-Z), 3º Fecha
+                df_resultado = df_resultado.sort_values(by=['Departamento', 'Nombre', 'Fecha']).reset_index(drop=True)
+                
+               
+                df_resumen = df_resultado.groupby(
+                    ['ID', 'Nombre', 'Departamento'], 
+                    sort=False
+                )[['Horas Extra', 'Bono nocturno']].sum().reset_index()
+                
+                #ambos reportes en la web usando pestañas (Tabs)
+                pestaña_detalle, pestaña_resumen = st.tabs(["📋 Detalle por Día", "📊 Resumen Totalizado"])
+                
+                with pestaña_detalle:
+                    st.subheader("Vista Previa del Reporte Diario")
+                    st.dataframe(df_resultado, use_container_width=True)
+                    
+                with pestaña_resumen:
+                    st.subheader("Resumen de Horas Extra y Bono Nocturno por Trabajador")
+                    st.dataframe(df_resumen, use_container_width=True)
+                
+                #Excel con ambas pestañas  ordenadas igual
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-                    df_resultado.to_excel(writer, index=False, sheet_name='Asistencias')
+                    df_resultado.to_excel(writer, index=False, sheet_name='Detalle Diario')
+                    df_resumen.to_excel(writer, index=False, sheet_name='Resumen Totales')
                 buffer.seek(0)
                 
                 st.download_button(
-                    label="📥 Descargar Reporte en Excel",
+                    label="📥 Descargar Reporte en Excel (Detallado y Resumen)",
                     data=buffer,
                     file_name=nombre_salida,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             else:
-                st.warning("El archivo se leyó pero no se generaron registros válidos para el reporte.")
-                
+                st.warning("El archivo se leyó pero no se generaron registros válidos.")
+            
         except Exception as e:
             st.error(f"Ocurrió un error al procesar el archivo: {e}")
