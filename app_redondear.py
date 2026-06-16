@@ -30,10 +30,6 @@ def redondear_hora(hora_str, es_entrada=True):
     minutos = dt.minute
     
     if es_entrada:
-        #  REGLA DE ENTRADA 
-        # - Menor a 13 minutos (< 13): hora en punto (:00)
-        # - Mayor o igual a 13 y menor a 46 minutos (13 a 45): media hora (:30) -> Ej: 21:15 -> 21:30
-        # - Mayor o igual a 46 minutos (46 a 59): hora siguiente completa (:00)
         if minutos < 13:
             dt = dt.replace(minute=0, second=0)
         elif minutos < 46:
@@ -41,10 +37,6 @@ def redondear_hora(hora_str, es_entrada=True):
         else:
             dt = (dt + timedelta(hours=1)).replace(minute=0, second=0)
     else:
-        #  REGLA DE SALIDA 
-        # - Menor a 30 minutos (< 30): hora en punto (:00)
-        # - Mayor o igual a 30 pero menor a 46 minutos (30 a 45): media hora (:30)
-        # - Mayor o igual a 46 minutos (46 a 59): hora siguiente completa (:00)
         if minutos < 30:
             dt = dt.replace(minute=0, second=0)
         elif minutos < 46:
@@ -54,7 +46,7 @@ def redondear_hora(hora_str, es_entrada=True):
                 
     return dt.strftime("%H:%M:%S")
 
-#  Zona interactiva para subir el archivo Excel
+# Zona interactiva para subir el archivo Excel
 uploaded_file = st.file_uploader("Arrastra aquí el archivo de Excel", type=["xlsx"])
 
 #esto es para usar el mismo nombre del archivo pero con el final procesado
@@ -77,15 +69,15 @@ if uploaded_file is not None:
                 df.columns = ['ID_Persona', 'Nombre', 'Departamento', 'Fecha_Hora_Original']
                 df['Quinta_Columna'] = ''
                 
-            #  Eliminar filas vacías
+            # Eliminar filas vacías
             df = df.dropna(subset=['Fecha_Hora_Original', 'ID_Persona'])
             
-            #  Limpieza de Textos
+            # Limpieza de Textos
             df['Departamento'] = df['Departamento'].astype(str).str.replace('CARMONA/', '', case=False).str.strip()
             df['ID_Persona'] = df['ID_Persona'].astype(str).str.replace("'", "", regex=False).str.strip()
             df['Quinta_Columna'] = df['Quinta_Columna'].astype(str).fillna('').str.upper().str.strip()
             
-            #  Separar Fecha y Hora de forma segura
+            # Separar Fecha y Hora de forma segura
             df['Fecha_Hora_Formateada'] = pd.to_datetime(df['Fecha_Hora_Original'], errors='coerce')
             df = df.dropna(subset=['Fecha_Hora_Formateada']) #elimina la fila que no tiene fecha
             df['Solo_Fecha'] = df['Fecha_Hora_Formateada'].dt.date
@@ -114,7 +106,7 @@ if uploaded_file is not None:
                 )
                 lista_de_objetos.append(nuevo_objeto)
                 
-            #  Agrupar por (Trabajador, Fecha)
+            # Agrupar por (Trabajador, Fecha)
             asistencias_por_dia = {}
             for obj in lista_de_objetos:
                 clave = (obj.id_registro, obj.nombre, obj.departamento, obj.fecha, obj.quinta_columna)
@@ -127,11 +119,15 @@ if uploaded_file is not None:
                     hora_texto = str(obj.hora).strip()
                 asistencias_por_dia[clave].append(hora_texto)
                 
-            #  Calcular horas aplicando filtros y lógica
+            # Calcular horas aplicando filtros y lógica
             reporte_horas = []
             formato = "%H:%M:%S"
             
             for (id_reg, nombre, depto, fecha, quinta_col), horas in asistencias_por_dia.items():
+                
+                # Identificar si la fecha corresponde a un domingo (el día 6 en Python es domingo)
+                es_domingo = 1 if pd.to_datetime(fecha).weekday() == 6 else 0
+                
                 horas_totales_dia = sorted(horas)
                 textos_limpios = []
                 
@@ -149,8 +145,6 @@ if uploaded_file is not None:
                 # La salida SIEMPRE debe ser la última marca del día 
                 if len(horas_totales_dia) >= 2:
                     ultima_marca_real = horas_totales_dia[-1]
-                    # Si la última marca real fue ignorada por la regla de los 5 min, 
-                    # reemplazamos el último registro válido con esta última marca real.
                     if textos_limpios[-1] != ultima_marca_real:
                         textos_limpios[-1] = ultima_marca_real
 
@@ -162,14 +156,16 @@ if uploaded_file is not None:
                     entrada_orig = horas_ordenadas[0] if horas_ordenadas else 'SIN MARCA'
                     reporte_horas.append({
                         'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
+                        'Feriados (Domingos)': es_domingo, # <- Nuevo campo
                         'Entrada Original': entrada_orig, 
                         'Salida Original': 'FALTA MARCA SALIDA',
-                        'Marcas Adicionales': 'N/A', # Agregamos la columna vacía
+                        'Marcas Adicionales': 'N/A',
                         'Entrada Redondeada': redondear_hora(entrada_orig, es_entrada=True),
                         'Salida Redondeada': 'FALTA MARCA SALIDA',
                         'Horas Totales': 0.0,
                         'Horas Restadas Descanso': 0.0,
-                        'Horas Netas': 0.0, 'Horas Extra': 0.0
+                        'Horas Netas': 0.0, 'Horas Extra': 0.0,
+                        'Bono nocturno': 0.0
                     })
                     continue
                     
@@ -178,7 +174,6 @@ if uploaded_file is not None:
                 
                 # marcajes adicionales (Excepto el primero y el último) ---
                 if total_marcas > 2:
-                    # Unimos los marcajes intermedios con un separador
                     marcas_adicionales = " | ".join(horas_ordenadas[1:-1])
                 else:
                     marcas_adicionales = "Sin marcas"
@@ -194,8 +189,6 @@ if uploaded_file is not None:
                 horas_totales = diferencia_total.total_seconds() / 3600
                 
                 horas_a_restar = 0.0
-                
-                # descansos
                 
                 # Entrada y Salida simple
                 if total_marcas == 2 and horas_totales >= 7:
@@ -227,9 +220,8 @@ if uploaded_file is not None:
                 horas_laborales = 7.5 if "MIXTO" in quinta_col else 8.0
                 horas_extra = max(0.0, horas_netas - horas_laborales) 
 
-                #Esto es el calculo para el bono nocturno
+                # Esto es el calculo para el bono nocturno
                 bono_nocturno = 0.0
-                #Este es el margen de donde comienza el bono nocturno
                 hora_bono = datetime.strptime("19:00:00", formato)
 
                 if dt_final_red >= hora_bono:
@@ -239,6 +231,7 @@ if uploaded_file is not None:
                 # Guardar los registros en el diccionario 
                 reporte_horas.append({
                     'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
+                    'Feriados (Domingos)': es_domingo, 
                     'Entrada Original': hora_inicio, 
                     'Salida Original': hora_final,
                     'Marcas Adicionales': marcas_adicionales,
@@ -248,37 +241,39 @@ if uploaded_file is not None:
                     'Horas Restadas Descanso': round(horas_a_restar, 2), 
                     'Horas Netas': round(horas_netas, 2), 
                     'Horas Extra': round(horas_extra, 2),
-                    'Bono nocturno': bono_nocturno
+                    'Bono nocturno': round(bono_nocturno, 2)
                 })
 
-                                
-            # renderizado del reporte            
             df_resultado = pd.DataFrame(reporte_horas)
 
             if not df_resultado.empty:
                 st.success("¡Procesamiento completado exitosamente!")
                 
-                # Pandas ordenará con esta prioridad: 1º Depto, 2º Nombre (A-Z), 3º Fecha
+                #Ordenamos el DataFrame original 
                 df_resultado = df_resultado.sort_values(by=['Departamento', 'Nombre', 'Fecha']).reset_index(drop=True)
                 
-               
+                # Calculamos el resumen 
                 df_resumen = df_resultado.groupby(
                     ['ID', 'Nombre', 'Departamento'], 
                     sort=False
-                )[['Horas Extra', 'Bono nocturno']].sum().reset_index()
+                )[['Horas Extra', 'Bono nocturno', 'Feriados (Domingos)']].sum().reset_index()
                 
-                #ambos reportes en la web usando pestañas (Tabs)
+                #se elimina la columna de feriados p¿ara el reporte detallado
+                df_resultado = df_resultado.drop(columns=['Feriados (Domingos)'])
+                
+                # Ambos reportes en la web usando pestañas (Tabs)
                 pestaña_detalle, pestaña_resumen = st.tabs(["📋 Detalle por Día", "📊 Resumen Totalizado"])
                 
                 with pestaña_detalle:
                     st.subheader("Vista Previa del Reporte Diario")
+                    # Ahora simplemente pasas df_resultado
                     st.dataframe(df_resultado, use_container_width=True)
                     
                 with pestaña_resumen:
-                    st.subheader("Resumen de Horas Extra y Bono Nocturno por Trabajador")
+                    st.subheader("Resumen Totales (Extra, Nocturno y Domingos)")
                     st.dataframe(df_resumen, use_container_width=True)
                 
-                #Excel con ambas pestañas  ordenadas igual
+                # Excel con ambas pestañas ordenadas igual
                 buffer = io.BytesIO()
                 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
                     df_resultado.to_excel(writer, index=False, sheet_name='Detalle Diario')
@@ -293,6 +288,6 @@ if uploaded_file is not None:
                 )
             else:
                 st.warning("El archivo se leyó pero no se generaron registros válidos.")
-            
+                
         except Exception as e:
             st.error(f"Ocurrió un error al procesar el archivo: {e}")
