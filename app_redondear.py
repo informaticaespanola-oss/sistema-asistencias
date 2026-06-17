@@ -126,7 +126,13 @@ if uploaded_file is not None:
             for (id_reg, nombre, depto, fecha, quinta_col), horas in asistencias_por_dia.items():
                 
                 # Identificar si la fecha corresponde a un domingo (el día 6 en Python es domingo)
-                es_domingo = 1 if pd.to_datetime(fecha).weekday() == 6 else 0
+                if pd.to_datetime(fecha).weekday() == 6:
+                    es_domingo = 1
+                    fecha_domingo = str(fecha)
+                else:
+                    es_domingo = 0
+                    fecha_domingo = ""
+
                 
                 horas_totales_dia = sorted(horas)
                 textos_limpios = []
@@ -156,7 +162,8 @@ if uploaded_file is not None:
                     entrada_orig = horas_ordenadas[0] if horas_ordenadas else 'SIN MARCA'
                     reporte_horas.append({
                         'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
-                        'Feriados (Domingos)': es_domingo, # <- Nuevo campo
+                        'Feriados (Domingos)': es_domingo,
+                        'Fecha domingo': fecha_domingo, 
                         'Entrada Original': entrada_orig, 
                         'Salida Original': 'FALTA MARCA SALIDA',
                         'Marcas Adicionales': 'N/A',
@@ -177,7 +184,8 @@ if uploaded_file is not None:
                     marcas_adicionales = " | ".join(horas_ordenadas[1:-1])
                 else:
                     marcas_adicionales = "Sin marcas"
-                
+
+                                
                 # Se obtienen las horas redondeadas oficiales de entrada y salida principal
                 hora_inicio_red = redondear_hora(hora_inicio, es_entrada=True)
                 hora_final_red = redondear_hora(hora_final, es_entrada=False)
@@ -232,6 +240,7 @@ if uploaded_file is not None:
                 reporte_horas.append({
                     'ID': id_reg, 'Nombre': nombre, 'Departamento': depto, 'Fecha': str(fecha),
                     'Feriados (Domingos)': es_domingo, 
+                    'Fecha domingo': fecha_domingo,
                     'Entrada Original': hora_inicio, 
                     'Salida Original': hora_final,
                     'Marcas Adicionales': marcas_adicionales,
@@ -253,13 +262,15 @@ if uploaded_file is not None:
                 df_resultado = df_resultado.sort_values(by=['Departamento', 'Nombre', 'Fecha']).reset_index(drop=True)
                 
                 # Calculamos el resumen 
-                df_resumen = df_resultado.groupby(
-                    ['ID', 'Nombre', 'Departamento'], 
-                    sort=False
-                )[['Horas Extra', 'Bono nocturno', 'Feriados (Domingos)']].sum().reset_index()
+                df_resumen = df_resultado.groupby(['ID', 'Nombre', 'Departamento'], sort=False).agg({
+                    'Horas Extra': 'sum',               # Suma los números
+                    'Bono nocturno': 'sum',             # Suma los números
+                    'Feriados (Domingos)': 'sum',       # Suma los 1 y 0 (Si hay dos domingos, dará 2)
+                    'Fecha domingo': lambda x: " | ".join([fecha for fecha in x if fecha != ""]) # Une los textos ignorando los vacíos
+                    }).reset_index()
                 
-                #se elimina la columna de feriados p¿ara el reporte detallado
-                df_resultado = df_resultado.drop(columns=['Feriados (Domingos)'])
+                #se elimina la columna de feriados para el reporte detallado
+                df_resultado = df_resultado.drop(columns=['Feriados (Domingos)', 'Fecha domingo'])
                 
                 # Ambos reportes en la web usando pestañas (Tabs)
                 pestaña_detalle, pestaña_resumen = st.tabs(["📋 Detalle por Día", "📊 Resumen Totalizado"])
